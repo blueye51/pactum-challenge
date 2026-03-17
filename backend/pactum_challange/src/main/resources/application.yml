@@ -1,1 +1,14 @@
-spring.application.name=pactum_challange
+spring:
+  application:
+    name: pactum_challenge
+  datasource:
+    url: jdbc:postgresql://localhost:5432/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+
+deepseek:
+  api-key: ${DEEPSEEK_API_KEY}
