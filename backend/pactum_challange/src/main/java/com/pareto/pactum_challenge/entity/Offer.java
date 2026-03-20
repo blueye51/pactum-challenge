@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 @Entity
 @Getter
 @Setter
@@ -20,9 +22,10 @@ public class Offer {
     @ManyToOne(optional = false)
     private Participant madeBy;
 
-    @ManyToOne(optional = false)
-    private NegotiationTerm term;
-
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private double value;
+    private Status status = Status.PENDING;
+
+    @OneToMany(mappedBy = "offer", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OfferTerm> offerTerms;
 }

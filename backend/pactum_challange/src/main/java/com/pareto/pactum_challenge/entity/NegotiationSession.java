@@ -16,9 +16,6 @@ public class NegotiationSession {
     private Long id;
 
     @ManyToOne(optional = false)
-    private NegotiationTerm term;
-
-    @ManyToOne(optional = false)
     private Negotiator negotiator;
 
     @ManyToOne(optional = false)

@@ -18,12 +18,18 @@ public class NegotiationTerm {
     @Column(nullable = false, length = 50)
     private String name;
 
-    @Column(nullable = false)
     private double value;
 
-    @ManyToOne(optional = false)
-    private Unit unit; // What the value represents
+    @Column(nullable = false)
+    private String unit; // What the value represents
+
+    @Column(nullable = false)
+    private double min;
+
+    @Column(nullable = false)
+    private double max;
 
     @Column(nullable = false)
     private String description;
+
 }

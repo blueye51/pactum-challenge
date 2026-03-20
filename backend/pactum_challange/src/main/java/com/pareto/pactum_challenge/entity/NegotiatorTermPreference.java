@@ -10,20 +10,25 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class NegotiatorTermPreference {
-
     @Id
     @GeneratedValue
     private Long id;
 
     @ManyToOne(optional = false)
-    private NegotiationTerm term;
+    private Negotiator negotiator;
 
     @ManyToOne(optional = false)
-    private Negotiator negotiator;
+    private NegotiationTerm negotiationTerm;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Direction direction;
+
+    @Column(nullable = false)
+    private double idealValue;
+
+    @Column(nullable = false)
+    private double limitValue;
 
     @Column(nullable = false)
     private double weight;
@@ -31,5 +36,5 @@ public class NegotiatorTermPreference {
     @Column(nullable = false)
     private double strictness;
 
-    private String reasoning; // The "Why" in some of these fields
+    private String reasoning;
 }

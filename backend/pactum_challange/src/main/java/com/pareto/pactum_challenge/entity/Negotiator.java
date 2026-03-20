@@ -10,4 +10,15 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class Negotiator extends Participant {
+    @Column(nullable = false)
+    private double acceptanceThreshold;
+
+    @Column(nullable = false)
+    private double walkawayThreshold;
+
+    @Column(nullable = false)
+    private double concessionRate;
+
+    @Column(nullable = false)
+    private int maxOffersCount;
 }
