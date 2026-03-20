@@ -28,4 +28,9 @@ public class Offer {
 
     @OneToMany(mappedBy = "offer", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OfferTerm> offerTerms;
+
+    public Offer(NegotiationSession session, Participant madeBy) {
+        this.session = session;
+        this.madeBy = madeBy;
+    }
 }

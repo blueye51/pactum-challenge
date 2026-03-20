@@ -22,4 +22,6 @@ public class OfferTerm {
 
     @Column(nullable = false)
     private double value;
+
+    public OfferTerm(Offer offer, NegotiationTerm negotiationTerm, double value) {}
 }
