@@ -5,18 +5,15 @@ import com.pareto.pactum_challenge.dto.NegotiationContext;
 import com.pareto.pactum_challenge.dto.NegotiationResult;
 import com.pareto.pactum_challenge.entity.*;
 import com.pareto.pactum_challenge.negotiation.NegotiationNode;
-import com.pareto.pactum_challenge.service.NegotiationService;
-import com.pareto.pactum_challenge.service.ScoringService;
+import com.pareto.pactum_challenge.service.NegotiationDataService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 public class ProgressCheckNode implements NegotiationNode {
 
-    private final NegotiationService negotiationService;
+    private final NegotiationDataService dataService;
 
     @Override
     public NegotiationResult evaluate(Offer offer, NegotiationContext context) {
@@ -33,13 +30,13 @@ public class ProgressCheckNode implements NegotiationNode {
 
         boolean anyProgress = false;
 
-        for (OfferTerm current : negotiationService.getAllOfferTermsByOffer(offer)) {
-            OfferTerm previous = negotiationService.getAllOfferTermsByOffer(previousOffer).stream()
+        for (OfferTerm current : dataService.getAllOfferTermsByOffer(offer)) {
+            OfferTerm previous = dataService.getAllOfferTermsByOffer(previousOffer).stream()
                     .filter(t -> t.getNegotiationTerm().getId().equals(current.getNegotiationTerm().getId()))
                     .findFirst()
                     .orElseThrow();
 
-            NegotiatorTermPreference pref = negotiationService.getAllPreferencesByNegotiator(negotiator).stream()
+            NegotiatorTermPreference pref = dataService.getAllPreferencesByNegotiator(negotiator).stream()
                     .filter(p -> p.getNegotiationTerm().getId().equals(current.getNegotiationTerm().getId()))
                     .findFirst()
                     .orElseThrow();

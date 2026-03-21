@@ -18,8 +18,6 @@ public class NegotiationTerm {
     @Column(nullable = false, length = 50)
     private String name;
 
-    private double value;
-
     @Column(nullable = false)
     private String unit; // What the value represents
 

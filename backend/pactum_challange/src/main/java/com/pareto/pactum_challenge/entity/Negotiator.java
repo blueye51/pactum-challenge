@@ -21,4 +21,8 @@ public class Negotiator extends Participant {
 
     @Column(nullable = false)
     private int maxOffersCount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Strategy strategy = Strategy.BALANCED;
 }

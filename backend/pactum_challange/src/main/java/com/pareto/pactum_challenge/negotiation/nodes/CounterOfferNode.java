@@ -5,28 +5,25 @@ import com.pareto.pactum_challenge.dto.NegotiationContext;
 import com.pareto.pactum_challenge.dto.NegotiationResult;
 import com.pareto.pactum_challenge.entity.*;
 import com.pareto.pactum_challenge.negotiation.NegotiationNode;
-import com.pareto.pactum_challenge.service.NegotiationService;
+import com.pareto.pactum_challenge.service.NegotiationDataService;
 import com.pareto.pactum_challenge.service.ScoringService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class CounterOfferNode implements NegotiationNode {
 
     private final ScoringService scoringService;
-    private final NegotiationService negotiationService;
-
-    public CounterOfferNode(ScoringService scoringService, NegotiationService negotiationService) {
-        this.scoringService = scoringService;
-        this.negotiationService = negotiationService;
-    }
+    private final NegotiationDataService dataService;
 
     @Override
     public NegotiationResult evaluate(Offer offer, NegotiationContext context) {
         Negotiator negotiator = context.negotiator();
-        List<NegotiatorTermPreference> preferences = negotiationService.getAllPreferencesByNegotiator(negotiator);
+        List<NegotiatorTermPreference> preferences = dataService.getAllPreferencesByNegotiator(negotiator);
         int round = context.offers().size();
 
         Offer previousBotOffer = context.offers().stream()
@@ -39,13 +36,13 @@ public class CounterOfferNode implements NegotiationNode {
         Offer counterOffer = new Offer(context.session(), negotiator);
 
         for (NegotiatorTermPreference pref : preferences) {
-            OfferTerm supplierTerm = negotiationService.getAllOfferTermsByOffer(offer).stream()
+            OfferTerm supplierTerm = dataService.getAllOfferTermsByOffer(offer).stream()
                     .filter(t -> t.getNegotiationTerm().getId().equals(pref.getNegotiationTerm().getId()))
                     .findFirst()
                     .orElseThrow();
 
             double botPrevious = previousBotOffer != null
-                    ? negotiationService.getAllOfferTermsByOffer(previousBotOffer).stream()
+                    ? dataService.getAllOfferTermsByOffer(previousBotOffer).stream()
                     .filter(t -> t.getNegotiationTerm().getId().equals(pref.getNegotiationTerm().getId()))
                     .findFirst().orElseThrow().getValue()
                     : pref.getIdealValue();
