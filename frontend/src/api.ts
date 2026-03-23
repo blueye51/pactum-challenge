@@ -62,6 +62,33 @@ export interface AddTermPreferenceRequest {
   reasoning?: string
 }
 
+export interface NegotiationSession {
+  id: number
+  negotiator: Negotiator
+  user: { id: number; name: string }
+  score: number
+}
+
+export type OfferStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COUNTERED'
+
+export interface OfferTermValue {
+  termId: number
+  termName: string
+  termUnit: string
+  value: number
+}
+
+export interface ChatMsg {
+  type: 'message'
+  sender: 'user' | 'bot'
+  content: string
+  timestamp: number
+  offer?: {
+    terms: OfferTermValue[]
+    status: OfferStatus
+  }
+}
+
 const BASE = '/api'
 
 export async function createNegotiator(req: CreateNegotiatorRequest): Promise<Negotiator> {
@@ -108,8 +135,24 @@ export async function listTerms(): Promise<NegotiationTerm[]> {
   return res.json()
 }
 
+export async function createSession(negotiatorId: number): Promise<NegotiationSession> {
+  const res = await fetch(`${BASE}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ negotiatorId }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
 export async function getOrCreateGuest(): Promise<{ id: number; name: string }> {
   const res = await fetch(`${BASE}/me`)
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function getSessionMessages(sessionId: number): Promise<ChatMsg[]> {
+  const res = await fetch(`${BASE}/sessions/${sessionId}/messages`)
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }

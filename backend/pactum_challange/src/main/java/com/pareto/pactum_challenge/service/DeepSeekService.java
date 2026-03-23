@@ -28,7 +28,7 @@ public class DeepSeekService {
                 .build();
     }
 
-    public Flux<String> send(List<Map<String, String>> messages) {
+    public Flux<String> sendStreaming(List<Map<String, String>> messages) {
         Map<String, Object> body = Map.of(
                 "model", "deepseek-chat",
                 "messages", messages,
@@ -45,6 +45,24 @@ public class DeepSeekService {
                 .mapNotNull(this::extractContent);
     }
 
+    public String send(List<Map<String, String>> messages) {
+        Map<String, Object> body = Map.of(
+                "model", "deepseek-chat",
+                "messages", messages,
+                "stream", false
+        );
+
+        String response = webClient.post()
+                .uri("/v1/chat/completions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(String.class)
+                .block();
+
+        return extractFullContent(response);
+    }
+
     private String extractContent(String chunk) {
         try {
             return objectMapper.readTree(chunk)
@@ -54,6 +72,18 @@ public class DeepSeekService {
         } catch (Exception e) {
             log.debug("Could not parse chunk: {}", chunk);
             return null;
+        }
+    }
+
+    private String extractFullContent(String response) {
+        try {
+            return objectMapper.readTree(response)
+                    .path("choices").path(0)
+                    .path("message").path("content")
+                    .asText("I'm having trouble responding right now.");
+        } catch (Exception e) {
+            log.error("Could not parse DeepSeek response: {}", response, e);
+            return "I'm having trouble responding right now.";
         }
     }
 }

@@ -17,7 +17,7 @@ public class ChatMessage {
     @GeneratedValue
     private Long id;
 
-    @Column(nullable = false)
+    @Column(columnDefinition = "TEXT")
     private String message;
 
     @ManyToOne(optional = false)
@@ -28,6 +28,9 @@ public class ChatMessage {
 
     @ManyToOne(optional = false)
     private Participant recipient;
+
+    @ManyToOne
+    private Offer offer;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
