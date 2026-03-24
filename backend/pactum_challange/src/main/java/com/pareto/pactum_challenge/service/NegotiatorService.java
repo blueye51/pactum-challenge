@@ -65,7 +65,22 @@ public class NegotiatorService {
         preference.setWeight(request.weight());
         preference.setStrictness(request.strictness());
         preference.setReasoning(request.reasoning());
-        return preferenceRepository.save(preference);
+        preferenceRepository.save(preference);
+
+        normalizeWeights(negotiator);
+
+        return preferenceRepository.findById(preference.getId()).orElseThrow();
+    }
+
+    private void normalizeWeights(Negotiator negotiator) {
+        List<NegotiatorTermPreference> allPrefs = preferenceRepository.findAllByNegotiatorId(negotiator.getId());
+        double totalWeight = allPrefs.stream().mapToDouble(NegotiatorTermPreference::getWeight).sum();
+        if (totalWeight > 0 && totalWeight != 1.0) {
+            for (NegotiatorTermPreference p : allPrefs) {
+                p.setWeight(p.getWeight() / totalWeight);
+            }
+            preferenceRepository.saveAll(allPrefs);
+        }
     }
 
     public Negotiator findById(Long id) {
