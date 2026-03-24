@@ -77,6 +77,33 @@ public class DataBootstrap implements CommandLineRunner {
         // Wants late payment — Net 60 ideal, Net 30 limit. Flexible.
         preferenceRepository.save(pref(demo, paymentTerms, Direction.MAXIMIZE, 60, 30, 0.2, 0.3,
                 "We prefer Net 60 to keep cash flow healthy, but Net 30 is standard and we can work with that."));
+
+        // Second bot — used car buyer
+        Negotiator carBot = new Negotiator();
+        carBot.setName("AutoFleet");
+        carBot.setAcceptanceThreshold(0.6);
+        carBot.setWalkawayThreshold(0.2);
+        carBot.setConcessionRate(0.04);
+        carBot.setMaxOffersCount(8);
+        carBot.setStrategy(Strategy.CONCEDING);
+        carBot.setMarketContext(
+                "We buy used sedans and SUVs for our corporate fleet. " +
+                "Budget is $8,000–$15,000 per vehicle depending on mileage and condition. " +
+                "We need delivery within 3 weeks and pay on Net 30."
+        );
+        carBot = negotiatorRepository.save(carBot);
+
+        // Price per vehicle — wants low
+        preferenceRepository.save(pref(carBot, unitPrice, Direction.MINIMIZE, 8000, 15000, 0.45, 0.5,
+                "Market rate for fleet-grade used sedans is $10k–$12k. We buy in volume so expect a discount."));
+
+        // Delivery time — wants fast
+        preferenceRepository.save(pref(carBot, deliveryTime, Direction.MINIMIZE, 7, 21, 0.3, 0.7,
+                "We need cars on the lot quickly to fill fleet gaps. Over 3 weeks causes operational issues."));
+
+        // Payment terms — wants longer
+        preferenceRepository.save(pref(carBot, paymentTerms, Direction.MAXIMIZE, 45, 14, 0.25, 0.3,
+                "Net 45 is ideal for our accounting cycle but we can do Net 14 if the price is right."));
     }
 
     private NegotiationTerm term(String name, String unit, double min, double max, String description, boolean wholeNumber) {
