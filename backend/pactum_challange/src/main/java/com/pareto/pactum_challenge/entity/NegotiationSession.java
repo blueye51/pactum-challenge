@@ -23,4 +23,7 @@ public class NegotiationSession {
 
     private double score; // 0-1
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private SessionStatus sessionStatus = SessionStatus.ACTIVE;
 }

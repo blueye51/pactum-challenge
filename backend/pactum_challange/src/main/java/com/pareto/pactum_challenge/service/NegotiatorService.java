@@ -32,6 +32,7 @@ public class NegotiatorService {
         negotiator.setConcessionRate(request.concessionRate());
         negotiator.setMaxOffersCount(request.maxOffersCount());
         negotiator.setStrategy(request.strategy());
+        negotiator.setMarketContext(request.marketContext());
         return negotiatorRepository.save(negotiator);
     }
 
@@ -51,6 +52,7 @@ public class NegotiatorService {
             term.setDescription(request.termDescription());
             term.setMin(request.termMin());
             term.setMax(request.termMax());
+            term.setWholeNumber(request.termWholeNumber() != null && request.termWholeNumber());
             term = termRepository.save(term);
         }
 

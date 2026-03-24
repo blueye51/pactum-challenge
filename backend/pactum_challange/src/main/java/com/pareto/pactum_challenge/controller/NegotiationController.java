@@ -6,10 +6,7 @@ import com.pareto.pactum_challenge.repository.ChatMessageRepository;
 import com.pareto.pactum_challenge.repository.NegotiationSessionRepository;
 import com.pareto.pactum_challenge.repository.NegotiationTermRepository;
 import com.pareto.pactum_challenge.repository.OfferRepository;
-import com.pareto.pactum_challenge.service.DeepSeekMessageBuilder;
-import com.pareto.pactum_challenge.service.DeepSeekService;
-import com.pareto.pactum_challenge.service.NegotiationService;
-import com.pareto.pactum_challenge.service.PromptMode;
+import com.pareto.pactum_challenge.service.*;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +29,8 @@ public class NegotiationController {
     private final OfferRepository offerRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final NegotiationService negotiationService;
+    private final ScoringService scoringService;
+    private final NegotiationDataService dataService;
     private final DeepSeekService deepSeekService;
     private final DeepSeekMessageBuilder messageBuilder;
 
@@ -40,6 +39,16 @@ public class NegotiationController {
     public ChatResponse handleOffer(@DestinationVariable Long sessionId, IncomingMessage incoming) {
         NegotiationSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new EntityNotFoundException("Session not found"));
+
+        // Block if session is already closed
+        if (session.getSessionStatus() != SessionStatus.ACTIVE) {
+            return new ChatResponse(
+                    "message", "bot",
+                    "This negotiation has already ended.",
+                    System.currentTimeMillis(), null,
+                    session.getSessionStatus()
+            );
+        }
 
         // Build and save the user's offer
         Offer userOffer = new Offer(session, session.getUser());
@@ -85,8 +94,20 @@ public class NegotiationController {
         userOffer.setStatus(userOfferStatus);
         offerRepository.save(userOffer);
 
-        // Build the bot's response
-        String botMessage = result.reasoning();
+        // Update session status on accept/reject
+        if (result.action() == Action.ACCEPT) {
+            List<NegotiatorTermPreference> prefs = dataService.getAllPreferencesByNegotiator(session.getNegotiator());
+            double finalScore = scoringService.score(userOffer, prefs);
+            session.setScore(finalScore);
+            session.setSessionStatus(SessionStatus.ACCEPTED);
+            sessionRepository.save(session);
+        } else if (result.action() == Action.REJECT) {
+            session.setSessionStatus(SessionStatus.REJECTED);
+            sessionRepository.save(session);
+        }
+
+        // Build the bot's response via DeepSeek
+        String botMessage = generateOfferResponse(session, sessionId, result, userOffer);
         ChatResponse.OfferResponse responseOffer = null;
 
         if (result.action() == Action.COUNTER && result.counterOffer() != null) {
@@ -136,7 +157,8 @@ public class NegotiationController {
                 "bot",
                 botMessage,
                 System.currentTimeMillis(),
-                responseOffer
+                responseOffer,
+                session.getSessionStatus()
         );
     }
 
@@ -145,6 +167,16 @@ public class NegotiationController {
     public ChatResponse handleMessage(@DestinationVariable Long sessionId, IncomingMessage incoming) {
         NegotiationSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new EntityNotFoundException("Session not found"));
+
+        // Block if session is already closed
+        if (session.getSessionStatus() != SessionStatus.ACTIVE) {
+            return new ChatResponse(
+                    "message", "bot",
+                    "This negotiation has already ended.",
+                    System.currentTimeMillis(), null,
+                    session.getSessionStatus()
+            );
+        }
 
         // Persist user message
         ChatMessage userMsg = new ChatMessage();
@@ -172,7 +204,177 @@ public class NegotiationController {
                 "bot",
                 botReply,
                 System.currentTimeMillis(),
-                null
+                null,
+                SessionStatus.ACTIVE
         );
+    }
+
+    @MessageMapping("/session/{sessionId}/accept")
+    @SendTo("/topic/session/{sessionId}")
+    public ChatResponse handleAccept(@DestinationVariable Long sessionId, IncomingMessage incoming) {
+        NegotiationSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new EntityNotFoundException("Session not found"));
+
+        if (session.getSessionStatus() != SessionStatus.ACTIVE) {
+            return new ChatResponse(
+                    "message", "bot",
+                    "This negotiation has already ended.",
+                    System.currentTimeMillis(), null,
+                    session.getSessionStatus()
+            );
+        }
+
+        // Find the latest bot offer and mark it accepted
+        Offer latestBotOffer = offerRepository.findAllBySessionIdOrderByIdAsc(sessionId).stream()
+                .filter(o -> o.getMadeBy() instanceof Negotiator)
+                .reduce((first, second) -> second)
+                .orElseThrow(() -> new IllegalStateException("No bot offer to accept"));
+
+        latestBotOffer.setStatus(Status.ACCEPTED);
+        offerRepository.save(latestBotOffer);
+
+        // Score and close session
+        List<NegotiatorTermPreference> prefs = dataService.getAllPreferencesByNegotiator(session.getNegotiator());
+        double finalScore = scoringService.score(latestBotOffer, prefs);
+        session.setScore(finalScore);
+        session.setSessionStatus(SessionStatus.ACCEPTED);
+        sessionRepository.save(session);
+
+        // Save user's acceptance message
+        ChatMessage userMsg = new ChatMessage();
+        userMsg.setSession(session);
+        userMsg.setSender(session.getUser());
+        userMsg.setRecipient(session.getNegotiator());
+        userMsg.setMessage(incoming.content() != null ? incoming.content() : "I accept this offer.");
+        chatMessageRepository.save(userMsg);
+
+        // Generate bot's closing response via DeepSeek
+        List<ChatMessage> chatHistory = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
+
+        StringBuilder acceptSummary = new StringBuilder("The supplier has ACCEPTED your latest counter-offer:\n");
+        for (OfferTerm ot : latestBotOffer.getOfferTerms()) {
+            acceptSummary.append("- %s: %s %s\n".formatted(
+                    ot.getNegotiationTerm().getName(),
+                    fmt(ot.getValue()),
+                    ot.getNegotiationTerm().getUnit()
+            ));
+        }
+        acceptSummary.append("\nThe deal is done. Respond warmly and confirm the agreed terms.");
+
+        Map<String, String> extraVars = Map.of(
+                "action", "ACCEPT",
+                "actionDetails", "The supplier accepted your offer. Celebrate the deal and summarize the agreed terms."
+        );
+
+        String botReply;
+        try {
+            List<Map<String, String>> llmMessages = messageBuilder.buildMessages(
+                    session, PromptMode.OFFER_RESPONSE, extraVars, chatHistory, acceptSummary.toString()
+            );
+            botReply = deepSeekService.send(llmMessages);
+        } catch (Exception e) {
+            log.error("DeepSeek failed for accept response", e);
+            botReply = "Deal accepted! Thank you for the negotiation.";
+        }
+
+        // Save bot's closing message
+        ChatMessage botMsg = new ChatMessage();
+        botMsg.setSession(session);
+        botMsg.setSender(session.getNegotiator());
+        botMsg.setRecipient(session.getUser());
+        botMsg.setMessage(botReply);
+        chatMessageRepository.save(botMsg);
+
+        // Build accepted offer response
+        List<OfferTermDto> acceptedTerms = latestBotOffer.getOfferTerms().stream()
+                .map(ot -> new OfferTermDto(
+                        ot.getNegotiationTerm().getId(),
+                        ot.getNegotiationTerm().getName(),
+                        ot.getNegotiationTerm().getUnit(),
+                        ot.getValue()
+                ))
+                .toList();
+
+        return new ChatResponse(
+                "message",
+                "bot",
+                botReply,
+                System.currentTimeMillis(),
+                new ChatResponse.OfferResponse(acceptedTerms, Status.ACCEPTED),
+                SessionStatus.ACCEPTED
+        );
+    }
+
+    private String generateOfferResponse(NegotiationSession session, Long sessionId,
+                                          NegotiationResult result, Offer userOffer) {
+        String action = result.action().name();
+        String actionDetails = buildActionDetails(result, userOffer);
+
+        Map<String, String> extraVars = Map.of(
+                "action", action,
+                "actionDetails", actionDetails
+        );
+
+        List<ChatMessage> chatHistory = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
+
+        // Build a user message that summarizes the offer for context
+        StringBuilder offerSummary = new StringBuilder("The supplier submitted an offer:\n");
+        for (OfferTerm ot : userOffer.getOfferTerms()) {
+            offerSummary.append("- %s: %s %s\n".formatted(
+                    ot.getNegotiationTerm().getName(),
+                    fmt(ot.getValue()),
+                    ot.getNegotiationTerm().getUnit()
+            ));
+        }
+        if (result.reasoning() != null && !result.reasoning().isBlank()) {
+            offerSummary.append("\nEngine reasoning: ").append(result.reasoning());
+        }
+
+        try {
+            List<Map<String, String>> llmMessages = messageBuilder.buildMessages(
+                    session, PromptMode.OFFER_RESPONSE, extraVars, chatHistory, offerSummary.toString()
+            );
+            return deepSeekService.send(llmMessages);
+        } catch (Exception e) {
+            log.error("DeepSeek failed for offer response, using engine reasoning", e);
+            return result.reasoning();
+        }
+    }
+
+    private String buildActionDetails(NegotiationResult result, Offer userOffer) {
+        StringBuilder sb = new StringBuilder();
+
+        switch (result.action()) {
+            case ACCEPT -> sb.append("You are accepting this offer. The terms are good enough.");
+            case REJECT -> {
+                sb.append("You are rejecting this offer and ending the negotiation.\n");
+                sb.append("Engine reasoning: ").append(result.reasoning());
+            }
+            case COUNTER -> {
+                sb.append("You are countering with a new offer.\n");
+                sb.append("Engine reasoning: ").append(result.reasoning()).append("\n");
+                if (result.counterOffer() != null && result.counterOffer().getOfferTerms() != null) {
+                    sb.append("Your counter-offer terms:\n");
+                    for (OfferTerm ot : result.counterOffer().getOfferTerms()) {
+                        sb.append("- %s: %s %s\n".formatted(
+                                ot.getNegotiationTerm().getName(),
+                                fmt(ot.getValue()),
+                                ot.getNegotiationTerm().getUnit()
+                        ));
+                    }
+                }
+            }
+            case CONTINUE -> {
+                sb.append("You are not making a final decision yet — giving feedback.\n");
+                sb.append("Engine reasoning: ").append(result.reasoning());
+            }
+        }
+
+        return sb.toString();
+    }
+
+    private static String fmt(double v) {
+        if (v == (long) v) return String.valueOf((long) v);
+        return String.valueOf(v);
     }
 }

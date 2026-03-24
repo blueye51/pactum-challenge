@@ -63,6 +63,9 @@ export default function GuestLobby() {
 
                 {isExpanded && (
                   <div className="bot-card-details">
+                    {n.marketContext && (
+                      <p className="bot-market-context">{n.marketContext}</p>
+                    )}
                     <div className="bot-card-stats">
                       <span>Max rounds: {n.maxOffersCount}</span>
                     </div>

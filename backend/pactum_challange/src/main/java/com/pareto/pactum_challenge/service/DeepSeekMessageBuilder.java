@@ -22,9 +22,19 @@ public class DeepSeekMessageBuilder {
             List<ChatMessage> chatHistory,
             String latestUserMessage
     ) {
+        return buildMessages(session, mode, Map.of(), chatHistory, latestUserMessage);
+    }
+
+    public List<Map<String, String>> buildMessages(
+            NegotiationSession session,
+            PromptMode mode,
+            Map<String, String> extraVars,
+            List<ChatMessage> chatHistory,
+            String latestUserMessage
+    ) {
         List<Map<String, String>> messages = new ArrayList<>();
 
-        String systemPrompt = promptRegistry.buildSystemPrompt(session, mode);
+        String systemPrompt = promptRegistry.buildSystemPrompt(session, mode, extraVars);
         messages.add(Map.of("role", "system", "content", systemPrompt));
 
         for (ChatMessage msg : chatHistory) {

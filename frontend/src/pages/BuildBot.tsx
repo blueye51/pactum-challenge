@@ -27,8 +27,9 @@ export default function BuildBot() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Step 1: Name
+  // Step 1: Name + Market Context
   const [name, setName] = useState('')
+  const [marketContext, setMarketContext] = useState('')
 
   // Step 2: Settings
   const [acceptanceThreshold, setAcceptanceThreshold] = useState(0.7)
@@ -158,6 +159,7 @@ export default function BuildBot() {
         concessionRate,
         maxOffersCount,
         strategy,
+        marketContext: marketContext.trim() || undefined,
       }
       const negotiator = await createNegotiator(req)
 
@@ -202,6 +204,22 @@ export default function BuildBot() {
             onChange={(e) => setName(e.target.value)}
             autoFocus
           />
+
+          <label className="form-field" style={{ marginTop: 24 }}>
+            <span className="label-text">
+              Market Context
+              <HelpTip text="Describe what the bot is buying, the market it operates in, typical prices and timelines. This is shown to the supplier at the start of the negotiation so they know what they're dealing with." />
+            </span>
+            <textarea
+              className="input"
+              rows={4}
+              placeholder="e.g. We're a retail chain sourcing phone accessories from Asian manufacturers. Typical unit prices are $2-$15, delivery 30-60 days by sea..."
+              value={marketContext}
+              onChange={(e) => setMarketContext(e.target.value)}
+              style={{ resize: 'vertical' }}
+            />
+          </label>
+
           <div className="step-actions">
             <button
               className="btn-primary"
@@ -526,6 +544,13 @@ export default function BuildBot() {
               <div><span className="muted">Concession Rate:</span> {concessionRate}</div>
               <div><span className="muted">Max Offers:</span> {maxOffersCount}</div>
             </div>
+
+            {marketContext.trim() && (
+              <div style={{ marginBottom: 16 }}>
+                <span className="muted">Market Context:</span>
+                <p style={{ margin: '4px 0' }}>{marketContext}</p>
+              </div>
+            )}
 
             <h3>Preferences ({preferences.length})</h3>
             {preferences.map((p) => (

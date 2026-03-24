@@ -61,12 +61,30 @@ public class SessionController {
                     NegotiationSession session = new NegotiationSession();
                     session.setUser(user);
                     session.setNegotiator(negotiator);
-                    return sessionRepository.save(session);
+                    NegotiationSession saved = sessionRepository.save(session);
+
+                    // Save opening message with market context
+                    if (negotiator.getMarketContext() != null && !negotiator.getMarketContext().isBlank()) {
+                        String opening = "Hi! I'm %s. %s\n\nFeel free to ask me anything or make your first offer when you're ready."
+                                .formatted(negotiator.getName(), negotiator.getMarketContext());
+
+                        ChatMessage openingMsg = new ChatMessage();
+                        openingMsg.setSession(saved);
+                        openingMsg.setSender(negotiator);
+                        openingMsg.setRecipient(user);
+                        openingMsg.setMessage(opening);
+                        chatMessageRepository.save(openingMsg);
+                    }
+
+                    return saved;
                 });
     }
 
     @GetMapping("/sessions/{sessionId}/messages")
     public List<ChatResponse> getMessages(@PathVariable Long sessionId) {
+        NegotiationSession negotiationSession = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new EntityNotFoundException("Session not found"));
+
         List<ChatMessage> messages = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
 
         return messages.stream().map(msg -> {
@@ -90,7 +108,8 @@ public class SessionController {
                     sender,
                     msg.getMessage(),
                     msg.getCreatedAt().toEpochMilli(),
-                    offerResponse
+                    offerResponse,
+                    negotiationSession.getSessionStatus()
             );
         }).toList();
     }

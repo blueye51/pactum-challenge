@@ -12,6 +12,7 @@ public record CreateNegotiatorRequest(
         @NotNull @Min(0) @Max(1) Double walkawayThreshold,
         @NotNull @Min(0) @Max(1) Double concessionRate,
         @NotNull @Min(1) Integer maxOffersCount,
-        @NotNull Strategy strategy
+        @NotNull Strategy strategy,
+        String marketContext
 ) {
 }

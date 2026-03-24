@@ -33,16 +33,26 @@ public class PromptRegistry {
     }
 
     public String buildSystemPrompt(NegotiationSession session, PromptMode mode) {
+        return buildSystemPrompt(session, mode, Map.of());
+    }
+
+    public String buildSystemPrompt(NegotiationSession session, PromptMode mode, Map<String, String> extraVars) {
         Negotiator bot = session.getNegotiator();
         List<NegotiatorTermPreference> preferences = dataService.getAllPreferencesByNegotiator(bot);
 
+        String marketCtx = bot.getMarketContext() != null ? bot.getMarketContext() : "No specific market context provided.";
+
         String filled = baseTemplate
                 .replace("{{botName}}", bot.getName())
+                .replace("{{marketContext}}", marketCtx)
                 .replace("{{strategy}}", bot.getStrategy().name())
                 .replace("{{maxOffers}}", String.valueOf(bot.getMaxOffersCount()))
                 .replace("{{termBlock}}", buildTermBlock(preferences));
 
         String modeSection = modeTemplates.get(mode);
+        for (var entry : extraVars.entrySet()) {
+            modeSection = modeSection.replace("{{" + entry.getKey() + "}}", entry.getValue());
+        }
 
         return filled + "\n\n" + modeSection;
     }

@@ -30,4 +30,6 @@ public class NegotiationTerm {
     @Column(nullable = false)
     private String description;
 
+    @Column(nullable = false)
+    private boolean wholeNumber;
 }

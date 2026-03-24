@@ -7,15 +7,21 @@ interface NumberInputProps {
   min?: number
   max?: number
   placeholder?: string
+  wholeNumber?: boolean
 }
 
-export default function NumberInput({ value, onChange, className, min, max, placeholder }: NumberInputProps) {
-  const [text, setText] = useState(String(value))
+export default function NumberInput({ value, onChange, className, min, max, placeholder, wholeNumber }: NumberInputProps) {
+  const [text, setText] = useState(String(wholeNumber ? Math.round(value) : value))
   const [focused, setFocused] = useState(false)
+
+  function parse(raw: string): number {
+    const n = wholeNumber ? parseInt(raw, 10) : parseFloat(raw)
+    return n
+  }
 
   function handleChange(raw: string) {
     setText(raw)
-    const n = parseFloat(raw)
+    const n = parse(raw)
     if (!isNaN(n)) {
       onChange(n)
     }
@@ -23,14 +29,15 @@ export default function NumberInput({ value, onChange, className, min, max, plac
 
   function handleBlur() {
     setFocused(false)
-    const n = parseFloat(text)
+    const n = parse(text)
     if (isNaN(n) || text.trim() === '') {
       const fallback = min ?? 0
       setText(String(fallback))
       onChange(fallback)
     } else {
-      setText(String(n))
-      onChange(n)
+      const clamped = wholeNumber ? Math.round(n) : n
+      setText(String(clamped))
+      onChange(clamped)
     }
   }
 
@@ -42,7 +49,7 @@ export default function NumberInput({ value, onChange, className, min, max, plac
   return (
     <input
       type="text"
-      inputMode="decimal"
+      inputMode={wholeNumber ? "numeric" : "decimal"}
       className={className}
       value={focused ? text : String(value)}
       onChange={(e) => handleChange(e.target.value)}

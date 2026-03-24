@@ -9,6 +9,8 @@ import com.pareto.pactum_challenge.service.NegotiationDataService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+
 @Component
 @RequiredArgsConstructor
 public class ProgressCheckNode implements NegotiationNode {
@@ -19,14 +21,18 @@ public class ProgressCheckNode implements NegotiationNode {
     public NegotiationResult evaluate(Offer offer, NegotiationContext context) {
         Negotiator negotiator = context.negotiator();
 
-        Offer previousOffer = context.offers().stream()
+        // Find the previous user offer (excluding the current one)
+        List<Offer> previousUserOffers = context.offers().stream()
                 .filter(o -> o.getMadeBy() instanceof User)
-                .reduce((first, second) -> second)
-                .orElse(null);
+                .filter(o -> !o.getId().equals(offer.getId()))
+                .toList();
 
-        if (previousOffer == null) {
+        // No previous user offer to compare against — skip
+        if (previousUserOffers.isEmpty()) {
             return new NegotiationResult(Action.CONTINUE, null, null);
         }
+
+        Offer previousOffer = previousUserOffers.getLast();
 
         boolean anyProgress = false;
 
@@ -49,7 +55,7 @@ public class ProgressCheckNode implements NegotiationNode {
         }
 
         if (!anyProgress) {
-            return new NegotiationResult(Action.REJECT, null, "The User didn't even try to negotiate for a more favourable price");
+            return new NegotiationResult(Action.REJECT, null, "No progress from your previous offer — you haven't moved on any term.");
         }
 
         return new NegotiationResult(Action.CONTINUE, null, null);

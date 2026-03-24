@@ -9,6 +9,7 @@ export interface Negotiator {
   concessionRate: number
   maxOffersCount: number
   strategy: Strategy
+  marketContext: string | null
 }
 
 export interface TermPreference {
@@ -20,6 +21,7 @@ export interface TermPreference {
     min: number
     max: number
     description: string
+    wholeNumber: boolean
   }
   direction: Direction
   idealValue: number
@@ -36,6 +38,7 @@ export interface CreateNegotiatorRequest {
   concessionRate: number
   maxOffersCount: number
   strategy: Strategy
+  marketContext?: string
 }
 
 export interface NegotiationTerm {
@@ -45,6 +48,7 @@ export interface NegotiationTerm {
   min: number
   max: number
   description: string
+  wholeNumber: boolean
 }
 
 export interface AddTermPreferenceRequest {
@@ -67,9 +71,11 @@ export interface NegotiationSession {
   negotiator: Negotiator
   user: { id: number; name: string }
   score: number
+  sessionStatus: SessionStatus
 }
 
 export type OfferStatus = 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'COUNTERED'
+export type SessionStatus = 'ACTIVE' | 'ACCEPTED' | 'REJECTED'
 
 export interface OfferTermValue {
   termId: number
@@ -87,6 +93,7 @@ export interface ChatMsg {
     terms: OfferTermValue[]
     status: OfferStatus
   }
+  sessionStatus?: SessionStatus
 }
 
 const BASE = '/api'

@@ -1,5 +1,6 @@
 package com.pareto.pactum_challenge.dto;
 
+import com.pareto.pactum_challenge.entity.SessionStatus;
 import com.pareto.pactum_challenge.entity.Status;
 
 import java.util.List;
@@ -9,7 +10,8 @@ public record ChatResponse(
         String sender,
         String content,
         long timestamp,
-        OfferResponse offer
+        OfferResponse offer,
+        SessionStatus sessionStatus
 ) {
     public record OfferResponse(
             List<OfferTermDto> terms,

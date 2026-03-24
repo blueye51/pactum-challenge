@@ -25,4 +25,7 @@ public class Negotiator extends Participant {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Strategy strategy = Strategy.BALANCED;
+
+    @Column(columnDefinition = "TEXT")
+    private String marketContext;
 }

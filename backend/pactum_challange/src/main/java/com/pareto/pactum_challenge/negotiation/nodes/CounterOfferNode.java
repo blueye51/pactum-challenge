@@ -60,6 +60,10 @@ public class CounterOfferNode implements NegotiationNode {
                 newValue = Math.max(newValue, pref.getLimitValue());
             }
 
+            if (pref.getNegotiationTerm().isWholeNumber()) {
+                newValue = Math.round(newValue);
+            }
+
             counterTerms.add(new OfferTerm(counterOffer, pref.getNegotiationTerm(), newValue));
         }
 

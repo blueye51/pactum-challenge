@@ -12,6 +12,7 @@ public record AddTermPreferenceRequest(
         String termDescription,
         Double termMin,
         Double termMax,
+        Boolean termWholeNumber,
         @NotNull Direction direction,
         @NotNull Double idealValue,
         @NotNull Double limitValue,

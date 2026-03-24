@@ -14,6 +14,7 @@ import {
   type ChatMsg,
   type TermPreference,
   type OfferTermValue,
+  type SessionStatus,
 } from '../api'
 
 export default function Negotiate() {
@@ -29,6 +30,7 @@ export default function Negotiate() {
   const [connected, setConnected] = useState(false)
   const [loading, setLoading] = useState(true)
   const [thinking, setThinking] = useState(false)
+  const [sessionStatus, setSessionStatus] = useState<SessionStatus>('ACTIVE')
 
   // Offer panel + pending attachment
   const [showOffer, setShowOffer] = useState(false)
@@ -37,6 +39,8 @@ export default function Negotiate() {
 
   const clientRef = useRef<Client | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const ended = sessionStatus === 'ACCEPTED' || sessionStatus === 'REJECTED'
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -60,17 +64,24 @@ export default function Negotiate() {
 
         const initial: Record<number, number> = {}
         for (const p of prefs) {
-          initial[p.negotiationTerm.id] = Math.round((p.negotiationTerm.min + p.negotiationTerm.max) / 2)
+          const mid = (p.negotiationTerm.min + p.negotiationTerm.max) / 2
+          initial[p.negotiationTerm.id] = p.negotiationTerm.wholeNumber ? Math.round(mid) : mid
         }
         setOfferValues(initial)
 
         const s = await createSession(+botId!)
         setSession(s)
+        setSessionStatus(s.sessionStatus)
 
         // Load existing chat history if rejoining
         const history = await getSessionMessages(s.id)
         if (history.length > 0) {
           setMessages(history)
+          // Pick up session status from last message
+          const lastWithStatus = [...history].reverse().find((m) => m.sessionStatus)
+          if (lastWithStatus?.sessionStatus) {
+            setSessionStatus(lastWithStatus.sessionStatus)
+          }
         }
 
         stompClient = new Client({
@@ -78,11 +89,15 @@ export default function Negotiate() {
           onConnect: () => {
             setConnected(true)
             stompClient!.subscribe(`/topic/session/${s.id}`, (frame) => {
-              const data = JSON.parse(frame.body)
+              const data = JSON.parse(frame.body) as ChatMsg
               // Skip our own messages — we add them locally
               if (data.sender === 'user') return
               setThinking(false)
-              setMessages((prev) => [...prev, data as ChatMsg])
+              setMessages((prev) => [...prev, data])
+              // Update session status if the bot response carries one
+              if (data.sessionStatus) {
+                setSessionStatus(data.sessionStatus)
+              }
             })
           },
           onDisconnect: () => setConnected(false),
@@ -123,7 +138,7 @@ export default function Negotiate() {
   }
 
   function sendMessage() {
-    if (!session || !clientRef.current?.active) return
+    if (!session || !clientRef.current?.active || ended) return
     if (!input.trim() && !pendingOffer) return
 
     // What we show locally
@@ -153,6 +168,25 @@ export default function Negotiate() {
     setMessages((prev) => [...prev, msg])
     setInput('')
     setPendingOffer(null)
+    setThinking(true)
+  }
+
+  function acceptOffer() {
+    if (!session || !clientRef.current?.active || ended) return
+
+    const msg: ChatMsg = {
+      type: 'message',
+      sender: 'user',
+      content: 'I accept this offer.',
+      timestamp: Date.now(),
+    }
+
+    clientRef.current.publish({
+      destination: `/app/session/${session.id}/accept`,
+      body: JSON.stringify({ content: 'I accept this offer.' }),
+    })
+
+    setMessages((prev) => [...prev, msg])
     setThinking(true)
   }
 
@@ -200,6 +234,11 @@ export default function Negotiate() {
                     </div>
                   ))}
                 </div>
+                {msg.sender === 'bot' && msg.offer.status === 'PENDING' && !ended && (
+                  <button className="btn-accept-offer" onClick={acceptOffer} disabled={!connected}>
+                    Accept Offer
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -216,7 +255,7 @@ export default function Negotiate() {
         <div ref={messagesEndRef} />
       </div>
 
-      {showOffer && (
+      {showOffer && !ended && (
         <div className="offer-panel">
           <div className="offer-panel-header">
             <h3>Prepare Offer</h3>
@@ -236,6 +275,7 @@ export default function Negotiate() {
                   onChange={(v) => setOfferValues({ ...offerValues, [p.negotiationTerm.id]: v })}
                   min={p.negotiationTerm.min}
                   max={p.negotiationTerm.max}
+                  wholeNumber={p.negotiationTerm.wholeNumber}
                 />
               </div>
             ))}
@@ -246,7 +286,7 @@ export default function Negotiate() {
         </div>
       )}
 
-      {pendingOffer && (
+      {pendingOffer && !ended && (
         <div className="pending-offer-bar">
           <div className="pending-offer-preview">
             <span className="pending-offer-label">Offer attached</span>
@@ -256,30 +296,41 @@ export default function Negotiate() {
         </div>
       )}
 
-      <div className="chat-input-bar">
-        <button
-          className="btn-offer"
-          onClick={() => setShowOffer(!showOffer)}
-          disabled={!connected}
-        >
-          Offer
-        </button>
-        <input
-          className="chat-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={pendingOffer ? 'Add a message with your offer...' : 'Type a message...'}
-          disabled={!connected}
-        />
-        <button
-          className="btn-send"
-          onClick={sendMessage}
-          disabled={!connected || (!input.trim() && !pendingOffer)}
-        >
-          Send
-        </button>
-      </div>
+      {ended ? (
+        <div className={`session-ended-bar session-ended-${sessionStatus.toLowerCase()}`}>
+          <span>
+            {sessionStatus === 'ACCEPTED'
+              ? 'Deal accepted! The negotiation has concluded successfully.'
+              : 'The negotiation has ended. The bot walked away.'}
+          </span>
+          <button className="btn-primary" onClick={() => navigate('/guest')}>Back to Lobby</button>
+        </div>
+      ) : (
+        <div className="chat-input-bar">
+          <button
+            className="btn-offer"
+            onClick={() => setShowOffer(!showOffer)}
+            disabled={!connected}
+          >
+            Offer
+          </button>
+          <input
+            className="chat-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={pendingOffer ? 'Add a message with your offer...' : 'Type a message...'}
+            disabled={!connected}
+          />
+          <button
+            className="btn-send"
+            onClick={sendMessage}
+            disabled={!connected || (!input.trim() && !pendingOffer)}
+          >
+            Send
+          </button>
+        </div>
+      )}
     </div>
   )
 }
