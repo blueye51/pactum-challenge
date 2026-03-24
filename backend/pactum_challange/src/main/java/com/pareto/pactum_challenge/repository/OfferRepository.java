@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface OfferRepository extends JpaRepository<Offer, Long> {
     List<Offer> findAllBySessionIdOrderByIdAsc(Long sessionId);
+    void deleteAllBySessionId(Long sessionId);
 }

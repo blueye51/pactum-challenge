@@ -9,6 +9,8 @@ import {
   getNegotiator,
   getPreferences,
   getSessionMessages,
+  acceptSessionOffer,
+  resetSession,
   type NegotiationSession,
   type Negotiator,
   type ChatMsg,
@@ -171,23 +173,16 @@ export default function Negotiate() {
     setThinking(true)
   }
 
-  function acceptOffer() {
-    if (!session || !clientRef.current?.active || ended) return
+  async function acceptOffer() {
+    if (!session || ended) return
 
-    const msg: ChatMsg = {
-      type: 'message',
-      sender: 'user',
-      content: 'I accept this offer.',
-      timestamp: Date.now(),
+    try {
+      const updated = await acceptSessionOffer(session.id)
+      setSession(updated)
+      setSessionStatus(updated.sessionStatus)
+    } catch (e) {
+      console.error('Failed to accept offer', e)
     }
-
-    clientRef.current.publish({
-      destination: `/app/session/${session.id}/accept`,
-      body: JSON.stringify({ content: 'I accept this offer.' }),
-    })
-
-    setMessages((prev) => [...prev, msg])
-    setThinking(true)
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -303,7 +298,26 @@ export default function Negotiate() {
               ? 'Deal accepted! The negotiation has concluded successfully.'
               : 'The negotiation has ended. The bot walked away.'}
           </span>
-          <button className="btn-primary" onClick={() => navigate('/guest')}>Back to Lobby</button>
+          <div className="session-ended-actions">
+            <button className="btn-primary" onClick={() => navigate('/guest')}>Back to Lobby</button>
+            <button className="btn-secondary" onClick={async () => {
+              if (!session) return
+              try {
+                const fresh = await resetSession(session.id)
+                setSession(fresh)
+                setSessionStatus('ACTIVE')
+                setMessages([])
+                setPendingOffer(null)
+                setInput('')
+                setThinking(false)
+                const history = await getSessionMessages(fresh.id)
+                if (history.length > 0) setMessages(history)
+              } catch (e) {
+                console.error('Failed to reset session', e)
+              }
+            }}>Negotiate Again</button>
+            <span className="muted" style={{ fontSize: '0.75rem' }}>Demo only — not available in production</span>
+          </div>
         </div>
       ) : (
         <div className="chat-input-bar">

@@ -163,3 +163,19 @@ export async function getSessionMessages(sessionId: number): Promise<ChatMsg[]> 
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+export async function resetSession(sessionId: number): Promise<NegotiationSession> {
+  const res = await fetch(`${BASE}/sessions/${sessionId}/reset`, {
+    method: 'POST',
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function acceptSessionOffer(sessionId: number): Promise<NegotiationSession> {
+  const res = await fetch(`${BASE}/sessions/${sessionId}/accept`, {
+    method: 'POST',
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}

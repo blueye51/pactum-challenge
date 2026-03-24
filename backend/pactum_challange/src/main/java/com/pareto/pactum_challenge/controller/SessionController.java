@@ -7,10 +7,14 @@ import com.pareto.pactum_challenge.entity.*;
 import com.pareto.pactum_challenge.repository.ChatMessageRepository;
 import com.pareto.pactum_challenge.repository.NegotiationSessionRepository;
 import com.pareto.pactum_challenge.repository.NegotiatorRepository;
+import com.pareto.pactum_challenge.repository.OfferRepository;
+import com.pareto.pactum_challenge.service.NegotiationDataService;
+import com.pareto.pactum_challenge.service.ScoringService;
 import com.pareto.pactum_challenge.service.UserService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +30,9 @@ public class SessionController {
     private final NegotiatorRepository negotiatorRepository;
     private final NegotiationSessionRepository sessionRepository;
     private final ChatMessageRepository chatMessageRepository;
+    private final OfferRepository offerRepository;
+    private final ScoringService scoringService;
+    private final NegotiationDataService dataService;
 
     @GetMapping("/me")
     public User getOrCreateUser(HttpSession session) {
@@ -78,6 +85,63 @@ public class SessionController {
 
                     return saved;
                 });
+    }
+
+    @PostMapping("/sessions/{sessionId}/reset")
+    @Transactional
+    public NegotiationSession resetSession(@PathVariable Long sessionId) {
+        NegotiationSession old = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new EntityNotFoundException("Session not found"));
+
+        chatMessageRepository.deleteAllBySessionId(sessionId);
+        offerRepository.deleteAllBySessionId(sessionId);
+        sessionRepository.delete(old);
+
+        Negotiator negotiator = old.getNegotiator();
+        User user = old.getUser();
+
+        NegotiationSession fresh = new NegotiationSession();
+        fresh.setUser(user);
+        fresh.setNegotiator(negotiator);
+        NegotiationSession saved = sessionRepository.save(fresh);
+
+        if (negotiator.getMarketContext() != null && !negotiator.getMarketContext().isBlank()) {
+            String opening = "Hi! I'm %s. %s\n\nFeel free to ask me anything or make your first offer when you're ready."
+                    .formatted(negotiator.getName(), negotiator.getMarketContext());
+            ChatMessage openingMsg = new ChatMessage();
+            openingMsg.setSession(saved);
+            openingMsg.setSender(negotiator);
+            openingMsg.setRecipient(user);
+            openingMsg.setMessage(opening);
+            chatMessageRepository.save(openingMsg);
+        }
+
+        return saved;
+    }
+
+    @PostMapping("/sessions/{sessionId}/accept")
+    @Transactional
+    public NegotiationSession acceptOffer(@PathVariable Long sessionId) {
+        NegotiationSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new EntityNotFoundException("Session not found"));
+
+        if (session.getSessionStatus() != SessionStatus.ACTIVE) {
+            throw new IllegalStateException("Session is not active");
+        }
+
+        Offer latestBotOffer = offerRepository.findAllBySessionIdOrderByIdAsc(sessionId).stream()
+                .filter(o -> o.getMadeBy() instanceof Negotiator)
+                .reduce((first, second) -> second)
+                .orElseThrow(() -> new IllegalStateException("No bot offer to accept"));
+
+        latestBotOffer.setStatus(Status.ACCEPTED);
+        offerRepository.save(latestBotOffer);
+
+        List<NegotiatorTermPreference> prefs = dataService.getAllPreferencesByNegotiator(session.getNegotiator());
+        double finalScore = scoringService.score(latestBotOffer, prefs);
+        session.setScore(finalScore);
+        session.setSessionStatus(SessionStatus.ACCEPTED);
+        return sessionRepository.save(session);
     }
 
     @GetMapping("/sessions/{sessionId}/messages")
