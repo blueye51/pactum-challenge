@@ -210,6 +210,21 @@ export default function Negotiate() {
           Negotiation started with {bot.name}. You are playing as {guest.name}.
         </div>
 
+        {!ended && connected && !messages.some(m => m.offer) && (
+          <div className="chat-system-msg">
+            <button className="btn-secondary" onClick={() => {
+              if (!session || !clientRef.current?.active) return
+              clientRef.current.publish({
+                destination: `/app/session/${session.id}/firstoffer`,
+                body: '{}',
+              })
+              setThinking(true)
+            }}>
+              Ask {bot.name} to make the first offer
+            </button>
+          </div>
+        )}
+
         {messages.map((msg, i) => (
           <div key={i} className={`chat-bubble ${msg.sender === 'user' ? 'chat-user' : 'chat-bot'}`}>
             {msg.content && <div className="chat-bubble-content">{msg.content}</div>}

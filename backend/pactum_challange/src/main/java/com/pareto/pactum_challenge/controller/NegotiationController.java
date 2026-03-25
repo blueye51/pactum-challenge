@@ -209,6 +209,106 @@ public class NegotiationController {
         );
     }
 
+    @MessageMapping("/session/{sessionId}/firstoffer")
+    @SendTo("/topic/session/{sessionId}")
+    public ChatResponse handleFirstOffer(@DestinationVariable Long sessionId) {
+        NegotiationSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new EntityNotFoundException("Session not found"));
+
+        if (session.getSessionStatus() != SessionStatus.ACTIVE) {
+            return new ChatResponse(
+                    "message", "bot",
+                    "This negotiation has already ended.",
+                    System.currentTimeMillis(), null,
+                    session.getSessionStatus()
+            );
+        }
+
+        // Only allow if no offers exist yet
+        List<Offer> existing = offerRepository.findAllBySessionIdOrderByIdAsc(sessionId);
+        if (!existing.isEmpty()) {
+            return new ChatResponse(
+                    "message", "bot",
+                    "An offer has already been made in this session.",
+                    System.currentTimeMillis(), null,
+                    SessionStatus.ACTIVE
+            );
+        }
+
+        Negotiator negotiator = session.getNegotiator();
+        List<NegotiatorTermPreference> preferences = dataService.getAllPreferencesByNegotiator(negotiator);
+
+        // Build opening offer at ideal values
+        Offer openingOffer = new Offer(session, negotiator);
+        List<OfferTerm> terms = new ArrayList<>();
+        for (NegotiatorTermPreference pref : preferences) {
+            double value = pref.getIdealValue();
+            if (pref.getNegotiationTerm().isWholeNumber()) {
+                value = Math.round(value);
+            }
+            terms.add(new OfferTerm(openingOffer, pref.getNegotiationTerm(), value));
+        }
+        openingOffer.setOfferTerms(terms);
+        openingOffer.setStatus(Status.PENDING);
+        offerRepository.save(openingOffer);
+
+        // Build offer summary for LLM
+        StringBuilder offerSummary = new StringBuilder("You are making the FIRST offer to open the negotiation. Present your opening offer:\n");
+        for (OfferTerm ot : terms) {
+            offerSummary.append("- %s: %s %s\n".formatted(
+                    ot.getNegotiationTerm().getName(),
+                    fmt(ot.getValue()),
+                    ot.getNegotiationTerm().getUnit()
+            ));
+        }
+        offerSummary.append("\nPresent this as your opening position. Be confident but open to discussion.");
+
+        Map<String, String> extraVars = Map.of(
+                "action", "COUNTER",
+                "actionDetails", "You are presenting your opening offer to start the negotiation.\n" + offerSummary
+        );
+
+        List<ChatMessage> chatHistory = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
+
+        String botMessage;
+        try {
+            List<Map<String, String>> llmMessages = messageBuilder.buildMessages(
+                    session, PromptMode.OFFER_RESPONSE, extraVars, chatHistory, offerSummary.toString()
+            );
+            botMessage = deepSeekService.send(llmMessages);
+        } catch (Exception e) {
+            log.error("DeepSeek failed for first offer", e);
+            botMessage = "Here's my opening offer — let's start the negotiation.";
+        }
+
+        // Save bot message
+        ChatMessage botMsg = new ChatMessage();
+        botMsg.setSession(session);
+        botMsg.setSender(negotiator);
+        botMsg.setRecipient(session.getUser());
+        botMsg.setMessage(botMessage);
+        botMsg.setOffer(openingOffer);
+        chatMessageRepository.save(botMsg);
+
+        List<OfferTermDto> responseTerms = terms.stream()
+                .map(ot -> new OfferTermDto(
+                        ot.getNegotiationTerm().getId(),
+                        ot.getNegotiationTerm().getName(),
+                        ot.getNegotiationTerm().getUnit(),
+                        ot.getValue()
+                ))
+                .toList();
+
+        return new ChatResponse(
+                "message",
+                "bot",
+                botMessage,
+                System.currentTimeMillis(),
+                new ChatResponse.OfferResponse(responseTerms, Status.PENDING),
+                SessionStatus.ACTIVE
+        );
+    }
+
     private String generateOfferResponse(NegotiationSession session, Long sessionId,
                                           NegotiationResult result, Offer userOffer) {
         String action = result.action().name();
