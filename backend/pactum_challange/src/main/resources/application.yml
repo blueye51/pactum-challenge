@@ -1,10 +1,8 @@
 spring:
   application:
     name: pactum_challenge
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:${POSTGRES_DB}}}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:${POSTGRES_DB}}
     username: ${DB_USER:${POSTGRES_USER}}
     password: ${DB_PASSWORD:${POSTGRES_PASSWORD}}
   jpa:
