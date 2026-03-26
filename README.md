@@ -25,8 +25,7 @@ cp .env.example .env
 docker-compose up --build
 ```
 
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:8080
+The app will be available at **http://localhost:8080** (frontend + API served together).
 
 ### Local Development (without Docker)
 
@@ -41,7 +40,7 @@ cd backend/pactum_challange && ./mvnw spring-boot:run
 cd frontend && npm install && npm run dev
 ```
 
-The frontend dev server proxies `/api` and `/ws` to `localhost:8080`.
+In dev mode, the Vite dev server at `http://localhost:5173` proxies `/api` and `/ws` to `localhost:8080`.
 
 ## Tech Stack
 

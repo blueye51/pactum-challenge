@@ -62,8 +62,8 @@ public class SessionController {
         Negotiator negotiator = negotiatorRepository.findById(request.negotiatorId())
                 .orElseThrow(() -> new EntityNotFoundException("Negotiator not found"));
 
-        // Reuse existing session if one exists for this user + negotiator
-        return sessionRepository.findByUserIdAndNegotiatorId(user.getId(), negotiator.getId())
+        // Reuse existing ACTIVE session if one exists for this user + negotiator
+        return sessionRepository.findByUserIdAndNegotiatorIdAndSessionStatus(user.getId(), negotiator.getId(), SessionStatus.ACTIVE)
                 .orElseGet(() -> {
                     NegotiationSession session = new NegotiationSession();
                     session.setUser(user);

@@ -16,9 +16,9 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
-    build: ./backend/pactum_challange
-    container_name: pactum-backend
+  app:
+    build: .
+    container_name: pactum-app
     ports:
       - "8080:8080"
     environment:
@@ -31,14 +31,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-
-  frontend:
-    build: ./frontend
-    container_name: pactum-frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
 
 volumes:
   pgdata:
