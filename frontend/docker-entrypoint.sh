@@ -11,6 +11,11 @@ if [ -z "$PORT" ]; then
   PORT=80
 fi
 
-envsubst '${BACKEND_URL} ${PORT}' < /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf
+sed "s|NGINX_BACKEND|${BACKEND_URL}|g; s|NGINX_PORT|${PORT}|g" \
+  /etc/nginx/nginx.conf.template > /etc/nginx/conf.d/default.conf
+
+echo "--- generated nginx config ---"
 cat /etc/nginx/conf.d/default.conf
+echo "--- end config ---"
+
 exec nginx -g 'daemon off;'
